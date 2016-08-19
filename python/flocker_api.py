@@ -60,6 +60,29 @@ class FlockerApi(object):
                                       "/v%s/%s" % (self._api_version, endpoint),
                                       data)
 
+    def _make_api_request(self, method, endpoint, data = None):
+      # Convert data to string if it's not yet in this format
+      if data and not isinstance(data, str):
+          data = json.dumps(data).encode('utf-8')
+
+      headers = {"Content-type": "application/json"}
+      self._http_client.request(method, endpoint, data,
+                                headers=headers)
+
+      response = self._http_client.getresponse()
+
+      status =  response.status
+      body =  response.read()
+
+      print('Status:', status)
+
+      # If you want debugging
+      # print('Body:', body)
+
+      print()
+
+      return json.loads(body.decode('utf-8'))
+
     # Specific API requests
     def get_version(self):
       version = self.get('version')
@@ -84,30 +107,10 @@ class FlockerApi(object):
         return api.post('configuration/datasets', data)
 
     def delete_volume(self, dataset_id):
-      return self.delete('configuration/datasets/%s' % dataset_id)
+        return self.delete('configuration/datasets/%s' % dataset_id)
 
-    def _make_api_request(self, method, endpoint, data = None):
-      # Convert data to string if it's not yet in this format
-      if data and not isinstance(data, str):
-          data = json.dumps(data).encode('utf-8')
-
-      headers = {"Content-type": "application/json"}
-      self._http_client.request(method, endpoint, data,
-                                headers=headers)
-
-      response = self._http_client.getresponse()
-
-      status =  response.status
-      body =  response.read()
-
-      print('Status:', status)
-
-      # If you want debugging
-      # print('Body:', body)
-
-      print()
-
-      return json.loads(body.decode('utf-8'))
+    def get_volumes(self):
+        return api.get('configuration/datasets')
 
 if __name__ == '__main__':
     api = FlockerApi()
@@ -117,7 +120,7 @@ if __name__ == '__main__':
 
     # Get current volumes (datasets)
     print('Datasets:')
-    datasets = api.get('configuration/datasets')
+    datasets = api.get_volumes()
     print(json.dumps(datasets, sort_keys=True, indent=4))
 
 
