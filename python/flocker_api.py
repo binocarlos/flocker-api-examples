@@ -133,6 +133,9 @@ class FlockerApi(object):
     def get_nodes(self):
         return api.get('state/nodes')
 
+    def get_leases(self):
+        return api.get('configuration/leases')
+
 if __name__ == '__main__':
     api = FlockerApi(debug = True)
 
@@ -145,6 +148,9 @@ if __name__ == '__main__':
 
     print('Nodes:')
     nodes = api.get_nodes()
+
+    print('Leases:')
+    leases = api.get_leases()
 
     print('Trying to reuse the primary from returned list')
     primary_id = datasets[0]['primary']
