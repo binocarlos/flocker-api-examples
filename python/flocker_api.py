@@ -9,11 +9,12 @@ import tempfile
 class FlockerApi(object):
     DEFAULT_PLUGIN_DIR = os.environ.get('CERT_DIR', '/etc/flocker')
 
-    def __init__(self, api_version = 1):
+    def __init__(self, api_version = 1, debug = False):
         control_service = os.environ.get("CONTROL_SERVICE", "localhost")
         control_port = os.environ.get("CONTROL_PORT", 4523)
 
         self._api_version = api_version
+        self._debug = debug
         self._last_known_config = None
 
         key_file = os.environ.get("KEY_FILE", "%s/plugin.key" % self.DEFAULT_PLUGIN_DIR)
@@ -84,12 +85,17 @@ class FlockerApi(object):
 
       print('Status:', status)
 
-      # If you want debugging
+      # If you want verbose debugging
       # print('Body:', body)
 
       print()
 
-      return json.loads(body.decode('utf-8'))
+      result = json.loads(body.decode('utf-8'))
+
+      if self._debug == True:
+          print(json.dumps(result, sort_keys=True, indent=4))
+
+      return result
 
     # Specific API requests
     def get_version(self):
@@ -114,14 +120,21 @@ class FlockerApi(object):
 
         return api.post('configuration/datasets', data)
 
+    def move_volume(self, volume_id, new_primary_id):
+        data = { 'primary': new_primary_id }
+        return api.post('configuration/datasets/%s' % volume_id, data)
+
     def delete_volume(self, dataset_id):
         return self.delete('configuration/datasets/%s' % dataset_id)
 
     def get_volumes(self):
         return api.get('configuration/datasets')
 
+    def get_nodes(self):
+        return api.get('state/nodes')
+
 if __name__ == '__main__':
-    api = FlockerApi()
+    api = FlockerApi(debug = True)
 
     # Show us the version of Flocker
     print("Version:", api.get_version())
@@ -129,8 +142,9 @@ if __name__ == '__main__':
     # Get current volumes (datasets)
     print('Datasets:')
     datasets = api.get_volumes()
-    print(json.dumps(datasets, sort_keys=True, indent=4))
 
+    print('Nodes:')
+    nodes = api.get_nodes()
 
     print('Trying to reuse the primary from returned list')
     primary_id = datasets[0]['primary']
@@ -139,8 +153,10 @@ if __name__ == '__main__':
     print('Create volume:')
     # Create a Flocker volume of size 10GB
     dataset_create_result = api.create_volume('my-test-volume3', 10, primary_id, profile = "gold")
-    print(json.dumps(dataset_create_result, sort_keys=True, indent=4))
-
     volume_id = dataset_create_result['dataset_id']
+
+    print('Move volume (to the same node):')
+    move_result = api.move_volume(volume_id, primary_id)
+
+    print('Delete volume:')
     delete_result = api.delete_volume(volume_id)
-    print(json.dumps(delete_result, sort_keys=True, indent=4))
