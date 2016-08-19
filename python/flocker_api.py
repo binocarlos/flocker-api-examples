@@ -14,6 +14,7 @@ class FlockerApi(object):
         control_port = os.environ.get("CONTROL_PORT", 4523)
 
         self._api_version = api_version
+        self._last_known_config = None
 
         key_file = os.environ.get("KEY_FILE", "%s/plugin.key" % self.DEFAULT_PLUGIN_DIR)
         cert_file = os.environ.get("CERT_FILE", "%s/plugin.crt" % self.DEFAULT_PLUGIN_DIR)
@@ -65,7 +66,10 @@ class FlockerApi(object):
       if data and not isinstance(data, str):
           data = json.dumps(data).encode('utf-8')
 
-      headers = {"Content-type": "application/json"}
+      headers = { 'Content-type': 'application/json' }
+      if self._last_known_config:
+          headers['X-If-Configuration-Matches'] = self._last_known_config
+
       self._http_client.request(method, endpoint, data,
                                 headers=headers)
 
@@ -73,6 +77,10 @@ class FlockerApi(object):
 
       status =  response.status
       body =  response.read()
+
+      # Make sure to use the X
+      if 'X-Configuration-Tag' in response.getheaders():
+          self._last_known_config = response.getheaders()['X-Configuration-Tag'].decode('utf-8')
 
       print('Status:', status)
 
