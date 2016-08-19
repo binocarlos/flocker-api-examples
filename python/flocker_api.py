@@ -60,6 +60,32 @@ class FlockerApi(object):
                                       "/v%s/%s" % (self._api_version, endpoint),
                                       data)
 
+    # Specific API requests
+    def get_version(self):
+      version = self.get('version')
+      return version['flocker']
+
+    def create_volume(self, name, size_in_gb, primary_id, profile = None):
+        if not isinstance(size_in_gb, int):
+            print('Error! Size must be an integer!')
+            exit(1)
+
+        data = {
+            'primary': primary_id,
+            'maximum_size': size_in_gb << 30,
+            'metadata': {
+               'name': name
+            }
+        }
+
+        if profile:
+            data['metadata']['clusterhq:flocker:profile'] = profile
+
+        return api.post('configuration/datasets', data)
+
+    def delete_volume(self, dataset_id):
+      return self.delete('configuration/datasets/%s' % dataset_id)
+
     def _make_api_request(self, method, endpoint, data = None):
       # Convert data to string if it's not yet in this format
       if data and not isinstance(data, str):
@@ -84,36 +110,26 @@ class FlockerApi(object):
       return json.loads(body.decode('utf-8'))
 
 if __name__ == '__main__':
-  api = FlockerApi()
+    api = FlockerApi()
 
-  # Show us the version of Flocker
-  version = api.get('version')
-  print("Version:", version['flocker'])
+    # Show us the version of Flocker
+    print("Version:", api.get_version())
 
-  # Get current volumes (datasets)
-  print('Datasets:')
-  datasets = api.get('configuration/datasets')
-  print(json.dumps(datasets, sort_keys=True, indent=4))
+    # Get current volumes (datasets)
+    print('Datasets:')
+    datasets = api.get('configuration/datasets')
+    print(json.dumps(datasets, sort_keys=True, indent=4))
 
-  # Create a Flocker volume of size 10GB
-  size_in_gb = 10
 
-  print('Trying to reuse the primary from returned list')
-  primary_id = datasets[0]['primary']
-  print('Primary:', primary_id)
+    print('Trying to reuse the primary from returned list')
+    primary_id = datasets[0]['primary']
+    print('Primary:', primary_id)
 
-  # XXX: Using shifts to evaluate max bytes
-  #      '<< 30' == '* 2^30' == '* 1024 * 1024 * 1024'
-  data = {
-           'primary': primary_id,
-           'maximum_size': size_in_gb << 30,
-           'metadata': {
-# If your backend supports profiles uncomment the following:
-#             'clusterhq:flocker:profile': 'silver',
-             'name': 'my-test-volume3'
-           }
-         }
+    print('Create volume:')
+    # Create a Flocker volume of size 10GB
+    dataset_create_result = api.create_volume('my-test-volume3', 10, primary_id, profile = "gold")
+    print(json.dumps(dataset_create_result, sort_keys=True, indent=4))
 
-  print('Create volume:')
-  dataset_create_result = api.post('configuration/datasets', data)
-  print(json.dumps(dataset_create_result, sort_keys=True, indent=4))
+    volume_id = dataset_create_result['dataset_id']
+    delete_result = api.delete_volume(volume_id)
+    print(json.dumps(delete_result, sort_keys=True, indent=4))
