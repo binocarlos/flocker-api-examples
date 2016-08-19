@@ -118,23 +118,32 @@ class FlockerApi(object):
         if profile:
             data['metadata']['clusterhq:flocker:profile'] = profile
 
-        return api.post('configuration/datasets', data)
+        return self.post('configuration/datasets', data)
 
     def move_volume(self, volume_id, new_primary_id):
         data = { 'primary': new_primary_id }
-        return api.post('configuration/datasets/%s' % volume_id, data)
+        return self.post('configuration/datasets/%s' % volume_id, data)
 
     def delete_volume(self, dataset_id):
         return self.delete('configuration/datasets/%s' % dataset_id)
 
     def get_volumes(self):
-        return api.get('configuration/datasets')
+        return self.get('configuration/datasets')
 
     def get_nodes(self):
-        return api.get('state/nodes')
+        return self.get('state/nodes')
 
     def get_leases(self):
-        return api.get('configuration/leases')
+        return self.get('configuration/leases')
+
+    def release_lease(self, dataset_id):
+        return self.delete('configuration/leases/%s' % dataset_id)
+
+    def acquire_lease(self, dataset_id, node_id, expires = None):
+        data = { 'dataset_id': dataset_id,
+                 'node_uuid': node_id,
+                 'expires': expires }
+        return self.post('configuration/leases', data)
 
 if __name__ == '__main__':
     api = FlockerApi(debug = True)
@@ -148,9 +157,7 @@ if __name__ == '__main__':
 
     print('Nodes:')
     nodes = api.get_nodes()
-
-    print('Leases:')
-    leases = api.get_leases()
+    first_node = nodes[0]['uuid']
 
     print('Trying to reuse the primary from returned list')
     primary_id = datasets[0]['primary']
@@ -158,11 +165,24 @@ if __name__ == '__main__':
 
     print('Create volume:')
     # Create a Flocker volume of size 10GB
-    dataset_create_result = api.create_volume('my-test-volume3', 10, primary_id, profile = "gold")
+    dataset_create_result = api.create_volume('my-test-volume3',
+                                              10,
+                                              primary_id,
+                                              profile = "gold")
     volume_id = dataset_create_result['dataset_id']
 
     print('Move volume (to the same node):')
-    move_result = api.move_volume(volume_id, primary_id)
+    api.move_volume(volume_id, primary_id)
+
+    print('Acquire lease:')
+    api.acquire_lease(volume_id, first_node)
+
+    print('Leases:')
+    leases = api.get_leases()
+    lease_id = leases[0]
+
+    print('Release lease:')
+    api.release_lease(volume_id)
 
     print('Delete volume:')
-    delete_result = api.delete_volume(volume_id)
+    api.delete_volume(volume_id)
