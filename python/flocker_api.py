@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
+#
+# Description: Flexible Flocker REST API Client
+# License: LGPLv2
+# Maintainer: Srdjan Grubor <sgnn7@sgnn7.org>
 
 import http.client
+import inspect
 import json
 import os
 import ssl
@@ -97,15 +102,35 @@ class FlockerApi(object):
 
       return result
 
+    # XXX: Dummy decorator that allows us to indicate what methods are part
+    #      of the CLI
+    def cli_method(func):
+        return func
+
+    # XXX: Yeah it's gnarly :(
+    # TODO: Get a better way to introspect that's not a static array
+    def get_methods(self):
+        source = inspect.getsourcelines(FlockerApi)[0]
+        for index, line in enumerate(source):
+            line = line.strip()
+            if line.strip() == '@cli_method':
+                nextLine = source[ index + 1 ]
+                name = nextLine.split('def')[1].split('(')[0].strip()
+                yield(name)
+
     # Specific API requests
+    @cli_method
     def get_version(self):
+      """
+      Gets version of the Flocker service
+      """
       version = self.get('version')
       return version['flocker']
 
+    @cli_method
     def create_volume(self, name, size_in_gb, primary_id, profile = None):
         if not isinstance(size_in_gb, int):
-            print('Error! Size must be an integer!')
-            exit(1)
+            size_in_gb = int(size_in_gb)
 
         data = {
             'primary': primary_id,
@@ -120,25 +145,33 @@ class FlockerApi(object):
 
         return self.post('configuration/datasets', data)
 
+
+    @cli_method
     def move_volume(self, volume_id, new_primary_id):
         data = { 'primary': new_primary_id }
         return self.post('configuration/datasets/%s' % volume_id, data)
 
+    @cli_method
     def delete_volume(self, dataset_id):
         return self.delete('configuration/datasets/%s' % dataset_id)
 
-    def get_volumes(self):
+    @cli_method
+    def list_volumes(self):
         return self.get('configuration/datasets')
 
-    def get_nodes(self):
+    @cli_method
+    def list_nodes(self):
         return self.get('state/nodes')
 
-    def get_leases(self):
+    @cli_method
+    def list_leases(self):
         return self.get('configuration/leases')
 
+    @cli_method
     def release_lease(self, dataset_id):
         return self.delete('configuration/leases/%s' % dataset_id)
 
+    @cli_method
     def acquire_lease(self, dataset_id, node_id, expires = None):
         data = { 'dataset_id': dataset_id,
                  'node_uuid': node_id,
@@ -146,43 +179,47 @@ class FlockerApi(object):
         return self.post('configuration/leases', data)
 
 if __name__ == '__main__':
+    # We only parse args if we're invoked as a script
+    import argparse
     api = FlockerApi(debug = True)
 
-    # Show us the version of Flocker
-    print("Version:", api.get_version())
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest='action')
 
-    # Get current volumes (datasets)
-    print('Datasets:')
-    datasets = api.get_volumes()
+    # Dynamically add all relevant cli methods
+    for method_name in api.get_methods():
+        func = getattr(api, method_name)
+        help_doc = func.__doc__ or "No documentation"
+        help_line = '%s. See "%s -help" for more options' % (help_doc, method_name)
+        args = inspect.getargspec(func)
 
-    print('Nodes:')
-    nodes = api.get_nodes()
-    first_node = nodes[0]['uuid']
+        parser_for_method = subparsers.add_parser(method_name, help = help_line)
+        # Mandatory args
+        for index, arg in enumerate(args.args):
+            # Skip 'self'
+            if index == 0:
+                continue
 
-    print('Trying to reuse the primary from returned list')
-    primary_id = datasets[0]['primary']
-    print('Primary:', primary_id)
+            # Divide into things with defaults and things without
+            if index < len(args.args) - len(args.defaults or []):
+                parser_for_method.add_argument(arg)
+            else:
+                parser_for_method.add_argument('--%s' % arg, default=args.defaults[len(args.args) - index - 1])
 
-    print('Create volume:')
-    # Create a Flocker volume of size 10GB
-    dataset_create_result = api.create_volume('my-test-volume3',
-                                              10,
-                                              primary_id,
-                                              profile = "gold")
-    volume_id = dataset_create_result['dataset_id']
+    parsed_args = parser.parse_args()
 
-    print('Move volume (to the same node):')
-    api.move_volume(volume_id, primary_id)
+    action = parsed_args.action
 
-    print('Acquire lease:')
-    api.acquire_lease(volume_id, first_node)
+    print("Action:", parsed_args.action)
 
-    print('Leases:')
-    leases = api.get_leases()
-    lease_id = leases[0]
+    func = getattr(api, action)
+    args = inspect.getargspec(func)
+    args_to_send = []
+    for index, arg in enumerate(args.args):
+        # Skip 'self'
+        if index == 0:
+            continue
 
-    print('Release lease:')
-    api.release_lease(volume_id)
-
-    print('Delete volume:')
-    api.delete_volume(volume_id)
+        args_to_send.append(vars(parsed_args)[arg])
+    print('Args:', args_to_send)
+    func(*args_to_send)
