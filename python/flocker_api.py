@@ -126,8 +126,7 @@ class FlockerApi(object):
     @cli_method
     def create_volume(self, name, size_in_gb, primary_id, profile = None):
         if not isinstance(size_in_gb, int):
-            print('Error! Size must be an integer!')
-            exit(1)
+            size_in_gb = int(size_in_gb)
 
         data = {
             'primary': primary_id,
@@ -153,15 +152,15 @@ class FlockerApi(object):
         return self.delete('configuration/datasets/%s' % dataset_id)
 
     @cli_method
-    def get_volumes(self):
+    def list_volumes(self):
         return self.get('configuration/datasets')
 
     @cli_method
-    def get_nodes(self):
+    def list_nodes(self):
         return self.get('state/nodes')
 
     @cli_method
-    def get_leases(self):
+    def list_leases(self):
         return self.get('configuration/leases')
 
     @cli_method
