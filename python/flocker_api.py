@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+#
+# Description: Flexible Flocker REST API Client
+# License: LGPLv2
+# Maintainer: Srdjan Grubor <sgnn7@sgnn7.org>
 
 import http.client
 import inspect
